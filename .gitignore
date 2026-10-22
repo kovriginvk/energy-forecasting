@@ -1,0 +1,5 @@
+.agents
+.ruff_cache
+.venv
+
+skills-lock.json
