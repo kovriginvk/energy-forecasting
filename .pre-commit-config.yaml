@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: nbstripout
+        name: Strip notebook outputs
+        entry: uv run --no-sync nbstripout
+        language: system
+        types: [jupyter]
+      - id: ruff
+        name: Ruff check
+        entry: uv run --no-sync ruff check
+        language: system
+        types_or: [python, pyi, jupyter]
