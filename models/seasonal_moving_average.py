@@ -1,18 +1,20 @@
-"""Baseline that averages matching positions in recent seasonal cycles."""
+"""Row-wise baseline using current and seasonally lagged target values."""
 
 import numpy as np
-from numpy.typing import NDArray
+import pandas as pd
 
 from .base import BaseForecaster
 
 
 class SeasonalMovingAverage(BaseForecaster):
-    """Average the last n_seasons cycles and repeat their mean profile.
+    """Average target(t - k * season_length) for k in range(n_seasons).
 
-    season_length is measured in hours. With 168 and 4, the forecast averages
-    matching hours from the last four weeks. Longer horizons repeat this fixed
-    profile without updating it with predictions or future observations.
+    The current target is included. With season_length=168 and n_seasons=2,
+    predict y(t+168) as the mean of target(t) and target(t-168). The dataset
+    defines the forecast lead; season_length controls historical spacing only.
     """
+
+    feature_columns = ("emissionfactor (kg CO2/kWh)",)
 
     def __init__(self, season_length: int = 168, n_seasons: int = 4):
         for name, value in (
@@ -24,17 +26,21 @@ class SeasonalMovingAverage(BaseForecaster):
         self.season_length = season_length
         self.n_seasons = n_seasons
 
-    def predict(self, horizon: int = 168) -> NDArray[np.float64]:
-        """Predict using complete cycles immediately before the origin."""
-        if not hasattr(self, "history_"):
-            raise RuntimeError("Call fit before predict.")
-        if isinstance(horizon, bool) or not isinstance(horizon, int) or horizon < 1:
-            raise ValueError("horizon must be a positive integer.")
-        required = self.season_length * self.n_seasons
-        if self.history_.size < required:
-            raise ValueError(f"At least {required} hourly observations are required.")
-        cycles = self.history_[-required:].reshape(
-            self.n_seasons, self.season_length
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> SeasonalMovingAverage:
+        """No parameters are learned; target history is supplied in predict."""
+        return self
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        """Use only current and preceding rows on a complete hourly grid."""
+        if not isinstance(X.index, pd.DatetimeIndex) or not (
+            X.index.to_series().diff().dropna().eq(pd.Timedelta(hours=1)).all()
+        ):
+            raise ValueError("X must be sorted on a unique, complete hourly grid.")
+        target = X[self.feature_columns[0]]
+        if not np.isfinite(target.to_numpy(dtype=float)).all():
+            raise ValueError("Target history must contain only finite values.")
+        seasons = pd.concat(
+            [target.shift(k * self.season_length) for k in range(self.n_seasons)],
+            axis=1,
         )
-        profile = cycles.mean(axis=0)
-        return np.resize(profile, horizon)
+        return seasons.mean(axis=1, skipna=False).rename("y_pred")

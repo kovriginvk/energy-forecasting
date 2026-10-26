@@ -1,28 +1,28 @@
-"""Common interface for forecasting models."""
+"""Common interface for row-wise forecasting models."""
 
 from abc import ABC, abstractmethod
 
-import numpy as np
-from numpy.typing import ArrayLike, NDArray
+import pandas as pd
 
 
 class BaseForecaster(ABC):
-    """Forecast from target history on a regular hourly grid."""
+    """Predict each row's future label from its available features.
 
-    def fit(self, y: ArrayLike) -> BaseForecaster:
-        """Store chronological target values ending at the forecast origin.
+    feature_columns declares the dataset columns consumed by the model.
+    X is indexed by feature time; y belongs to the same rows, 168 hours ahead
+    in the target-only dataset. Never include y or split in feature_columns.
+    """
 
-        Values must be finite and one-dimensional. Callers must preserve the
-        hourly grid and supply only observations available at the origin.
-        """
-        history = np.asarray(y, dtype=float)
-        if history.ndim != 1 or history.size == 0:
-            raise ValueError("y must be a non-empty one-dimensional sequence.")
-        if not np.isfinite(history).all():
-            raise ValueError("y must contain only finite values.")
-        self.history_ = history.copy()
-        return self
+    feature_columns: tuple[str, ...]
 
     @abstractmethod
-    def predict(self, horizon: int = 168) -> NDArray[np.float64]:
-        """Return the next horizon hourly predictions in chronological order."""
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> BaseForecaster:
+        """Fit on complete training rows with known labels."""
+
+    @abstractmethod
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        """Return predictions indexed like X, without using later rows.
+
+        History-based models receive preceding rows in X and return NaN where
+        history is insufficient. Callers select evaluation rows afterwards.
+        """
