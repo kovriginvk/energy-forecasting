@@ -1,144 +1,97 @@
 # Decision log
 
+Entries follow decision order, oldest first. Append new decisions at the end;
+keep usage instructions in README and implementation details in code.
+
 ## 2026-10-23 — Future actual generation in forecasting experiments
 
-Using future actual generation assumes perfect generation forecasts and may
-overstate forecasting performance. We will compare models with and without it
-on the same chronological 168-hour evaluation windows.
+Future actual generation assumes perfect forecasts and may overstate performance.
+Compare models with and without it on matching chronological 168-hour windows.
 
 ## 2026-10-26 — Selected generation data sources
 
-Use `solar`, `onshore wind`, `offshore wind`, `cogeneration`, `biomass`, `coal`, and `natural gas`. Exclude `other` due number of missing values. Exclude `waste` and `nuclear generation` following visual inspection of their time series. Keep the published CO₂ factor as the target and retain all raw data.
+Use solar, onshore/offshore wind, cogeneration, biomass, coal, and natural gas.
+Exclude `other` for missingness and waste/nuclear after visual inspection.
+Keep the published CO₂ factor as target and preserve all raw data.
 
 ## 2026-10-26 — First processed dataset
 
-Run `uv run python scripts/1_prepare_dataset_v1.py` to create
-`data/processed/dataset_v1.csv` from `data/raw/dataset.csv`, retaining all rows
-and seven selected generation volumes in kWh. Leave raw data unchanged.
-
-- Fill offshore wind gaps by repeating the last known 24-hour profile;
-  fill cogeneration gaps with the mean of values 168 and 336 hours earlier.
-- Replace both wind volumes only at 2026-10-20 21:00 UTC with previous-hour
-  values. Record all replacements in source flags and their union, `is_imputed`.
-- Keep `emissionfactor (kg CO2/kWh)` aligned with same-hour generation,
-  without shifting or duplicating it as `y`.
-- Set `split` by UTC time: `train` before 2026-07-01, `valid` until
-  2026-09-01, then `test`. Exclude `split` from model inputs.
-
-Select parameters on validation and evaluate on test in successive 168-hour
-windows. Supply generation forecasts for each window (future actuals assume
-perfect forecasts); target history must end before the window starts.
+Create `dataset_v1.csv` with seven generation volumes (kWh) and the same-hour
+`emissionfactor (kg CO2/kWh)` target, without shifting it or adding `y`.
+Fill offshore wind gaps with the last 24-hour profile and cogeneration gaps
+with the mean of values 168/336 hours earlier. Replace both wind values at
+2026-10-20 21:00 UTC with previous-hour values; record imputation flags.
+Split by UTC: train before July 1, valid before September 1, then test (2026).
+Select on valid, evaluate on test; exclude `split` from features. Weekly
+forecasts require generation forecasts and target history ending before the window.
 
 ## 2026-10-26 — Target-only dataset
 
-Run `uv run python scripts/1_prepare_dataset_target_only_v1.py` to create
-`data/processed/dataset_target_only_v1.csv` from raw target observations.
-Retain the original target and add hourly lags 1, 2, 3, 24, 48, 168, 336,
-and 504, with `y = target.shift(-168)`. Keep all rows, including missing
-initial lags and the final 168 unknown labels.
-
-Index rows by feature time; assign `split` using label time (index + 168 hours)
-and the existing July/September boundaries. Exclude incomplete rows from
-regression training and exclude `y` and `split` from features. A block of
-168 feature rows ending at the forecast origin predicts the next 168 hours.
-Use the original chronological target history for seasonal moving average.
+Create `dataset_target_only_v1.csv` with the original target, lags
+1/2/3/24/48/168/336/504 hours, and `y = target.shift(-168)`. Keep all rows;
+exclude incomplete training rows and unknown labels from evaluation.
+Index by feature time and assign splits by label time (index + 168 hours).
+Exclude `y` and `split` from inputs. At origin T, feature rows T−167h…T
+predict T+1h…T+168h without future targets or recursive feedback.
+SMA uses the original target history, including history preceding this block.
 
 ## 2026-10-26 — Calendar features
 
-Add boolean `is_holiday` (official Netherlands holidays, including Liberation
-Day every year) and `is_weekend` (Saturday or Sunday) to both datasets using
-the `holidays` package. Calculate dates in `Europe/Amsterdam` for the predicted
-hour: row time in the generation dataset and row time + 168 hours in the
-target-only dataset, including rows with unknown `y`. These calendar features
-are known in advance; neither flag implies that every workplace is closed.
+Add `is_holiday` (official Netherlands holidays, including Liberation Day every
+year, via `holidays`) and `is_weekend`. Use Europe/Amsterdam dates for the
+predicted hour: row time for generation, row time + 168 hours for target-only.
+These flags are known in advance, including for rows with unknown labels.
 
 ## 2026-10-26 — Row-wise target-only SMA experiment
 
-Use the common model interface `fit(X, y)` / `predict(X)`, with each model
-listing its input `feature_columns`. Predictions retain the feature-time index;
-compare each prediction directly with the same row's `y`, 168 hours ahead.
-SMA reads only the original target column and computes its own historical shifts.
-For `season_length=168` and `n_seasons=2`, predict with the mean of the current
-target and its value 168 hours earlier. One season repeats the current target.
-The season length controls historical spacing, not the dataset's forecast lead.
-This supersedes the earlier SMA interface that returned a future hourly path.
-
-Run one fixed-parameter validation experiment with:
-
-```bash
-uv run python scripts/2_run_experiment.py --season-length 168 --n-seasons 2
-```
-
-The script saves `results/sma/predictions.csv` (feature time, target time, actual
-and predicted values in kg CO2/kWh) and `metrics.json` (parameters and MAE/RMSE
-in g CO2/kWh). Use `--output-dir` to retain separate runs and `--split test`
-for final evaluation after selecting parameters on validation.
-
-Fit once on complete train rows whose label times are no later than the first
-evaluated feature time. This additional cutoff prevents regression training
-from using labels unavailable at that time, since splits follow label time.
-Pass preceding feature history to prediction, exclude unknown labels from
-scoring, and require predictions for every otherwise eligible evaluation row.
-SMA requires all requested seasonal observations; warmup predictions are missing.
-This experiment evaluates forecasts issued every hour at a fixed 168-hour lead.
-It does not evaluate all 168 lead hours from a single weekly forecast origin.
+Models expose `fit(X, y)`, `predict(X)`, and `feature_columns`; predictions keep
+the feature-time index and align with each row's `y`. SMA averages the current
+target and earlier values spaced by `season_length`; one season repeats the
+current target. Season length controls history spacing, not forecast lead.
+This replaces the earlier SMA interface returning a future hourly path.
+Fit once using complete train rows with labels available by the first evaluated
+feature time; pass preceding history and require predictions for every eligible
+row. This scores a fixed 168-hour lead, without simulating weekly issuance/refits.
+Initial SMA (season 168h, two seasons): valid MAE 54.986, RMSE 75.494 g CO2/kWh.
 
 ## 2026-10-26 — Target-only regression models and selectable features
 
-Keep using `data/processed/dataset_target_only_v1.csv`. Add `RegressionModel`
-with scikit-learn linear regression, and subclasses `LGBMRegressionModel` and
-`XGBMRegressionModel` using LightGBM and XGBoost. All three share feature
-selection, fitting, and indexed predictions. Each input row predicts its own
-`y`, 168 hours ahead; the experiment's training-label cutoff remains in place.
+Add linear regression, LightGBM, and XGBoost with explicit ordered feature
+selection; reject empty, duplicate, or leaking (`y`, `split`) inputs. Use neutral
+internal column names for library compatibility. Default to current target,
+eight lags, and two calendar flags; preserve the training-label cutoff.
+Boosting defaults: `random_state=42`, `n_jobs=1`; no tuning, early stopping,
+scaling, or extra features. Lock dependencies; import boosting libraries lazily.
+Initial valid scores on 1,488 labels (21,050 training rows), MAE/RMSE in g CO2/kWh:
+linear 57.255/70.711, LightGBM 61.524/77.680, XGBoost 64.736/83.215.
+These baseline results do not establish optimal parameters; test was not used
+for selection.
 
-Supply `feature_columns` when constructing a regression model. The CLI defaults
-to all 11 target-only features: current target, eight target lags, and the two
-calendar flags. Use `--features` to choose a subset. Models enforce that order
-at both fit and predict and reject empty, duplicate, or leaking (`y`, `split`)
-feature selections. Internally, selected columns get neutral names to avoid
-library restrictions on feature names; output timestamps remain unchanged.
+## 2026-10-26 — Configured experiments and shared evaluation
 
-Install Python dependencies with `uv sync`. LightGBM also needs the OpenMP
-runtime; on Ubuntu/Debian install it with `sudo apt-get install libgomp1`.
-The boosting libraries are imported only when their model is instantiated,
-so this runtime requirement does not prevent SMA or linear regression use.
+Use `experiments/run.py` with one YAML config per dataset/model pair. Execute
+only explicit `runs[].params` combinations overriding optional `base_params`.
+Save the config and per-run summary in `<config_stem>/`; numbered runs contain
+predictions, effective parameters, and metrics. Reruns replace prior results;
+ignore generated results in Git. Report MAE/RMSE in g CO2/kWh and R², without
+period-level metrics. Starter configs cover SMA and baseline linear regression.
+Share training/alignment in `src/experiment.py` and metrics in `src/evaluator.py`;
+the existing single-run CLI delegates to them. Configure target/offset as
+`y`/168h for target-only or `emissionfactor (kg CO2/kWh)`/0h for generation.
+Preserve fit-once evaluation and its label cutoff; future actual generation
+still assumes perfect forecasts.
 
-Each command runs one experiment on validation by default:
+## 2026-10-26 — Combined experiment metrics
 
-```bash
-uv run python scripts/2_run_experiment.py --model regression
-uv run python scripts/2_run_experiment.py --model lgbm
-uv run python scripts/2_run_experiment.py --model xgbm
+Use `experiments/collect_metrics.py` to rebuild `experiments/results/metrics.csv`
+from experiment summaries, adding the config name as `experiment`. Preserve
+individual run scores and metadata without averaging or training. Replace the
+file on collection to avoid duplicates; refresh after rerunning experiments.
 
-uv run python scripts/2_run_experiment.py --model regression \
-  --features 'emissionfactor (kg CO2/kWh)' target_lag_168 is_weekend \
-  --output-dir results/regression_subset
+## 2026-10-26 — Separate validation and test experiments
 
-uv run python scripts/2_run_experiment.py --model lgbm \
-  --model-params '{"n_estimators": 200, "learning_rate": 0.05}' \
-  --output-dir results/lgbm_200
-```
-
-Outputs default to `results/<model>/`. Metrics record the selected columns and
-explicit estimator parameters (including wrapper defaults); library defaults
-are fixed by `uv.lock`. Both boosting wrappers default to `random_state=42`
-and `n_jobs=1`. These runs use fixed parameters without tuning or early stopping.
-No scaling or feature engineering is added.
-
-Initial validation results with all 11 features, 21,050 eligible training rows,
-and the same 1,488 validation labels:
-
-| Model | MAE, g CO2/kWh | RMSE, g CO2/kWh |
-|---|---:|---:|
-| Linear regression | 57.255 | 70.711 |
-| LightGBM | 61.524 | 77.680 |
-| XGBoost | 64.736 | 83.215 |
-
-The earlier SMA run (168-hour season, two seasons) uses those same validation
-labels and scores MAE 54.986 / RMSE 75.494. These are initial validation results,
-not evidence that the default parameters or feature set are optimal. Test data
-have not been used for model selection.
-
-API references: [LinearRegression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html),
-[LGBMRegressor](https://lightgbm.readthedocs.io/en/stable/pythonapi/lightgbm.LGBMRegressor.html),
-and [XGBRegressor](https://xgboost.readthedocs.io/en/stable/python/python_api.html#xgboost.XGBRegressor).
+Store configs in `experiments/configs/<split>/` and results in
+`experiments/results/<split>/<config_stem>/` (`valid` or `test`). Require the
+config directory to match its YAML split; reruns replace only that split/config.
+Move existing experiments to valid. The collector reads both splits, preserving
+split/experiment/run identity and checking directory/split consistency.

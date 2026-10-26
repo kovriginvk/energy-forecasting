@@ -8,10 +8,33 @@ The project covers data preparation, model development and evaluation, and a
 reproducible workflow with a README and a short report. See
 `docs/initial_assignment.md` for requirements and `docs/dev_log.md` for decisions.
 
+## Target-only forecasting
+
+Target-only models can forecast the full next week by shifting the alignment of
+historical feature rows and prediction times. The dataset is indexed by feature
+time `t`, with `y(t) = target(t + 168 hours)` created by `target.shift(-168)`.
+Each model predicts one value per input row. At forecast origin `T`, the 168
+feature rows from `T - 167 hours` through `T` produce predictions for `T + 1 hour`
+through `T + 168 hours`. A fixed per-row lead of 168 hours therefore supports a
+168-value weekly forecast when applied to this historical block.
+
+Use only target observations available at each feature row's time; calendar
+features describe its predicted hour and are known in advance. SMA receives
+preceding history to compute seasonal averages. The model must be fitted only
+on labels available at forecast origin `T`. No future target observations or
+recursive prediction feedback are needed to construct the weekly forecast.
+The current experiment runner scores individual rows with a single fit; it does
+not simulate successive weekly forecast origins or weekly refitting.
+
 # Development Guidelines
 
 - Write all project files in English, including documentation, notebook Markdown,
   code comments, and user-facing text.
+- Keep `docs/dev_log.md` in chronological decision order (oldest first), including
+  within the same day. Append new entries at the end. Keep each entry to one short
+  paragraph or a few bullets covering the decision, reason, and key constraints.
+  Preserve historical decisions; record later changes in new entries. Put usage
+  instructions in README and implementation details in code instead of the log.
 
 # Behavioral Guidelines
 

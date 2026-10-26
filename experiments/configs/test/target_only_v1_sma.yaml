@@ -1,0 +1,10 @@
+dataset: data/processed/dataset_target_only_v1.csv
+model: sma
+target: y
+target_offset_hours: 168
+split: test
+
+runs:
+  - params:
+      season_length: 24
+      n_seasons: 14

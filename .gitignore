@@ -11,3 +11,6 @@ wheels/
 .venv
 
 skills-lock.json
+
+# Generated experiment results
+experiments/results/

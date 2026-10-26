@@ -1,0 +1,37 @@
+dataset: data/processed/dataset_target_only_v1.csv
+model: sma
+target: y
+target_offset_hours: 168
+split: valid
+
+base_params:
+  season_length: 168
+
+runs:
+  - params:
+      n_seasons: 1
+  - params:
+      n_seasons: 2
+  - params:
+      n_seasons: 4
+  - params:
+      n_seasons: 3
+  - params:
+      n_seasons: 6
+  - params:
+      n_seasons: 8
+  - params:
+      season_length: 24
+      n_seasons: 7
+  - params:
+      season_length: 24
+      n_seasons: 14
+  - params:
+      season_length: 24
+      n_seasons: 21
+  - params:
+      season_length: 24
+      n_seasons: 28
+  - params:
+      season_length: 336
+      n_seasons: 4
