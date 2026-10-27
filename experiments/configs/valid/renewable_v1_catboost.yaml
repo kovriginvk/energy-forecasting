@@ -1,0 +1,36 @@
+dataset: data/processed/dataset_v1.csv
+model: catboost
+target: y
+target_offset_hours: 0
+split: valid
+features:
+- sun_volume (kWh)
+- wind_land_volume (kWh)
+- wind_sea_volume (kWh)
+- biomass_volume (kWh)
+- is_holiday
+- is_weekend
+base_params:
+  random_seed: 42
+  thread_count: 1
+  verbose: false
+  allow_writing_files: false
+  learning_rate: 0.05
+  l2_leaf_reg: 3.0
+runs:
+- params:
+    loss_function: RMSE
+    depth: 2
+    iterations: 600
+- params:
+    loss_function: RMSE
+    depth: 6
+    iterations: 600
+- params:
+    loss_function: MAE
+    depth: 2
+    iterations: 600
+- params:
+    loss_function: MAE
+    depth: 6
+    iterations: 600

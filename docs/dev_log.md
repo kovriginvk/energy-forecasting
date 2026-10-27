@@ -246,3 +246,24 @@ depth, leaf size five; CatBoost run 012 (4.450), MAE, depth six, 600 iterations,
 learning rate 0.05, L2 three. Preserve selected features and remaining parameters
 in single-run test configs. Evaluate with the existing weekly expanding-window
 protocol and perfect-generation-forecast assumption, without test-based tuning.
+
+## 2026-10-27 — Renewable-only comparison
+
+Compare solar, onshore/offshore wind, and biomass with the existing full-mix
+inputs, retaining calendar flags, the dataset, and weekly evaluation windows.
+Exclude cogeneration, coal, and natural gas. Use four combinations per boosting
+model (depths 2/6, squared/absolute error, 600 trees), two forest combinations
+(depth 8/unlimited, squared error, leaf size five), and two unconstrained linear
+models (with/without intercept). Keep seeds and other shared parameters from
+the generation configs. Select by validation MAE before test evaluation; future
+actual renewable generation still assumes perfect forecasts.
+
+## 2026-10-27 — Selected renewable-only models for test evaluation
+
+Freeze the lowest-validation-MAE run for each renewable-only model in a
+single-run test config: linear regression run 001 (36.420 g CO2/kWh), forest
+run 002 (24.078), LightGBM run 004 (23.355), XGBoost run 004 (23.370), and
+CatBoost run 004 (22.818). The boosting winners use absolute error, depth six,
+and 600 trees; the forest uses unlimited depth and leaf size five, and linear
+regression retains its intercept. Preserve remaining parameters and evaluate
+on the existing test windows without using test scores for tuning.

@@ -1,0 +1,16 @@
+dataset: data/processed/dataset_v1.csv
+model: regression
+target: y
+target_offset_hours: 0
+split: test
+features:
+- sun_volume (kWh)
+- wind_land_volume (kWh)
+- wind_sea_volume (kWh)
+- biomass_volume (kWh)
+- is_holiday
+- is_weekend
+runs:
+- params:
+    fit_intercept: true
+    positive: false

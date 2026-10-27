@@ -192,3 +192,49 @@ both depths with leaf size 20. Forests use 200 trees and four workers; boosting
 uses one worker and all stochastic estimators use seed 42.
 The 46 combinations require 368 fits across eight validation origins. Select
 parameters on validation before creating single-run test configs.
+
+## Renewable-only comparison
+
+The `experiments/configs/valid/renewable_v1_*.yaml` configs use the same dataset,
+calendar flags, and weekly evaluation as the generation experiments, but retain
+only solar, onshore wind, offshore wind, and biomass generation. Future actual
+renewable generation still assumes perfect forecasts; fossil generation and
+cogeneration are excluded from inputs.
+
+Each boosting model compares depths 2/6 and squared/absolute-error objectives
+with 600 trees at learning rate 0.05 (four combinations). Random forest compares
+depth 8/unlimited with 200 trees, squared error, and leaf size five (two).
+Linear regression compares an intercept against no intercept, with unconstrained
+coefficients (two). The 16 combinations require 128 fits across eight validation
+origins. Run each config as for the generation experiments, for example:
+
+```bash
+uv run python experiments/run.py experiments/configs/valid/renewable_v1_catboost.yaml
+```
+
+Select the lowest-validation-MAE combination for each model before test evaluation.
+
+The selected combinations are frozen in
+`experiments/configs/test/renewable_v1_*.yaml`. Run them with the same command,
+replacing `valid` with `test`, then rebuild the combined metrics with
+`uv run python experiments/collect_metrics.py`.
+
+The completed comparison uses eight validation weeks and seven test weeks.
+All test models cover the same 1,176 hours, September 1–October 19, 2026 (UTC).
+Scores below are in g CO2/kWh; each row uses its own validation-selected
+parameters. Full-mix scores use the previously selected generation models.
+
+| Model | Renewable valid MAE | Renewable test MAE | Renewable test RMSE | Full-mix test MAE |
+|---|---:|---:|---:|---:|
+| Linear regression | 36.420 | 34.164 | 40.979 | 20.171 |
+| Random forest | 24.078 | 23.484 | 29.154 | 7.240 |
+| LightGBM | 23.355 | 20.530 | 26.344 | 3.979 |
+| XGBoost | 23.370 | 20.593 | 26.284 | 4.067 |
+| CatBoost | 22.818 | 19.742 | 24.843 | 2.666 |
+
+CatBoost has the lowest renewable-only validation and test MAE. Removing fossil
+generation and cogeneration substantially increases error, showing the value of
+knowing the realized production mix. This compares separately tuned feature
+sets with different search budgets; it does not isolate individual sources'
+contributions. Neither scenario measures operational accuracy with imperfect
+generation forecasts.
