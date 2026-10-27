@@ -31,6 +31,11 @@ or test labels. Hyperparameters remain fixed; incomplete windows are excluded.
 
 - Write all project files in English, including documentation, notebook Markdown,
   code comments, and user-facing text.
+- Update `docs/dev_log.md` only for major decisions that materially affect the
+  project scope, data, modeling or evaluation methodology, architecture, or
+  reproducibility. Do not log routine tuning, minor fixes, refactoring,
+  documentation edits, report formatting, or artifact regeneration unless they
+  change one of those decisions.
 - Keep `docs/dev_log.md` in chronological decision order (oldest first), including
   within the same day. Append new entries at the end. Keep each entry to one short
   paragraph or a few bullets covering the decision, reason, and key constraints.

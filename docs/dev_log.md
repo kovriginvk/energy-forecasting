@@ -1,8 +1,13 @@
 # Decision log
 
-Entries follow decision order, oldest first. Record major decisions, their
-reasons, and key constraints; keep usage instructions in README and
-implementation details in code.
+Record only major decisions that materially affect project scope, data,
+modeling or evaluation methodology, architecture, or reproducibility. Include
+the reason and key constraints. Do not add entries for routine tuning, minor
+fixes, refactoring, documentation edits, report formatting, or artifact
+regeneration unless they change a major decision.
+
+Entries follow decision order, oldest first. Keep usage instructions in README
+and implementation details in code.
 
 ## 2026-10-23 — Future actual generation in forecasting experiments
 
@@ -71,28 +76,11 @@ hours. Exclude incomplete windows and retain SMA history. Record the protocol,
 forecast origins, horizons, training sizes, and weekly scores to distinguish
 these results from historical fit-once scores.
 
-## 2026-10-27 — Target-only model selection
-
-Select linear regression and boosting configurations by the lowest validation
-MAE under weekly refitting, then freeze them for test evaluation. Validation
-favours nonnegative linear regression without an intercept and shallow
-absolute-error LightGBM/XGBoost models. Keep the feature set fixed and avoid
-test-based tuning or early stopping.
-
 ## 2026-10-27 — Random forest and CatBoost comparison
 
 Add random forest and CatBoost to compare bagged trees and another boosting
-method under the same features and weekly protocol. Search depth, model size,
-objective, and regularization on validation with fixed seeds. Reduce the costly
-forest search and parallelize remaining runs while preserving completed results
-and the actual configuration snapshots.
-
-## 2026-10-27 — Frozen target-only forest and CatBoost models
-
-Freeze each model's lowest-validation-MAE configuration for test: an
-absolute-error forest with depth 8 and leaf size 20, and an MAE CatBoost model
-with depth 2. Preserve all selected parameters and use the same weekly protocol
-as the other target-only models.
+method under the same features and weekly protocol. Select hyperparameters on
+validation with fixed seeds and freeze them before test evaluation.
 
 ## 2026-10-27 — Full-generation comparison
 
@@ -109,14 +97,6 @@ retaining calendar flags and the same weekly evaluation windows. Exclude
 cogeneration, coal, and natural gas. Select each model's configuration by
 validation MAE and freeze it for test; future actual renewable generation still
 assumes perfect forecasts.
-
-## 2026-10-27 — Report evidence and figure selection
-
-Report all 16 frozen model test results across the three scenarios. Illustrate
-September 2026 using the three lowest-full-test-MAE models per scenario; this
-ranking is descriptive and does not select hyperparameters. Distinguish monthly
-plot metrics from full-test scores, and include the data example and weekly
-evaluation protocol for context.
 
 ## 2026-10-27 — Report scope and interpretation
 

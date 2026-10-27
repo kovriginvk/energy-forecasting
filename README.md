@@ -248,6 +248,16 @@ panels show the three lowest-full-test-MAE models per scenario; panel metrics
 cover only the plotted month, while report tables cover the full test period.
 The committed figures and report are available without rerunning experiments.
 
+To rebuild the PDF from `data/final_report/report.md` and its PNG figures:
+
+```bash
+uv run scripts/2_build_report_pdf.py
+```
+
+The script declares its pinned rendering dependencies separately from the ML
+environment and overwrites `data/final_report/report.pdf`. It uses WeasyPrint,
+which requires system Pango libraries, and DejaVu fonts for the report layout.
+
 The [report](data/final_report/report.pdf) contains the complete comparison and
 next steps: evaluate real forecast inputs and their availability, compare across
 more seasons, and assess robustness before deployment. The
