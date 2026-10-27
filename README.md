@@ -31,8 +31,8 @@ uv sync --locked
 ```
 
 `uv` can provision the pinned Python version if needed. `pyproject.toml` defines
-the dependencies; `uv.lock` fixes the resolved environment, including the pytest
-development dependency. Run the commands below from the repository root.
+the dependencies; `uv.lock` fixes the resolved environment, including the
+development tools. Run the commands below from the repository root.
 
 To use notebooks, open them in VS Code with the Python/Jupyter extensions and
 select `.venv/bin/python` as the kernel. The environment includes `ipykernel`
@@ -267,7 +267,10 @@ more seasons, and assess robustness before deployment. The
 
 ```bash
 uv run pytest
+uv run pre-commit run --all-files
 ```
 
 Tests cover dataset preparation, calendar/target alignment, model behavior, and
-experiment configuration and metric collection.
+experiment configuration and metric collection. Pre-commit strips notebook
+outputs and runs Ruff. Enable these hooks for local commits with
+`uv run pre-commit install`.

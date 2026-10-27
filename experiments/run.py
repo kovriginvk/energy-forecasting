@@ -10,8 +10,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from evaluator import evaluate
 from experiment import run_experiment
@@ -23,6 +22,8 @@ from models import (
     SeasonalMovingAverage,
     XGBMRegressionModel,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 MODELS = {
     "sma": SeasonalMovingAverage,
