@@ -1,0 +1,46 @@
+dataset: data/processed/dataset_v1.csv
+model: random_forest
+target: y
+target_offset_hours: 0
+split: valid
+features:
+- sun_volume (kWh)
+- wind_land_volume (kWh)
+- wind_sea_volume (kWh)
+- cogeneration_volume (kWh)
+- biomass_volume (kWh)
+- coal_volume (kWh)
+- natural_gas_volume (kWh)
+- is_holiday
+- is_weekend
+base_params:
+  random_state: 42
+  n_jobs: 4
+  n_estimators: 200
+  max_features: 1.0
+  bootstrap: true
+runs:
+- params:
+    criterion: squared_error
+    max_depth: 8
+    min_samples_leaf: 5
+- params:
+    criterion: squared_error
+    max_depth: 8
+    min_samples_leaf: 20
+- params:
+    criterion: squared_error
+    max_depth: null
+    min_samples_leaf: 5
+- params:
+    criterion: squared_error
+    max_depth: null
+    min_samples_leaf: 20
+- params:
+    criterion: absolute_error
+    max_depth: 8
+    min_samples_leaf: 20
+- params:
+    criterion: absolute_error
+    max_depth: null
+    min_samples_leaf: 20

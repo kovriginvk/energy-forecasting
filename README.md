@@ -171,3 +171,24 @@ to the overall scores and one row to `weekly_metrics.csv`.
 `src/models/`, and data preparation scripts are in `scripts/`.
 
 Run checks with `uv run pytest`.
+
+## Generation validation experiments
+
+The `experiments/configs/valid/generation_v1_*.yaml` configs use `dataset_v1.csv`,
+target `y`, offset zero, all seven generation volumes, and the two calendar flags.
+Future actual generation assumes perfect generation forecasts. Run a config with,
+for example:
+
+```bash
+uv run python experiments/run.py experiments/configs/valid/generation_v1_lgbm.yaml
+```
+
+Linear regression has four intercept/positive-coefficient combinations. Each
+boosting model has 12 combinations: squared/absolute-error objectives, depths
+2/4/6, and 200/600 trees (iterations for CatBoost), at learning rate 0.05.
+LightGBM uses 4/16/32 leaves respectively. Random forest has six combinations:
+squared error at depths 8/unlimited and leaf sizes 5/20, plus absolute error at
+both depths with leaf size 20. Forests use 200 trees and four workers; boosting
+uses one worker and all stochastic estimators use seed 42.
+The 46 combinations require 368 fits across eight validation origins. Select
+parameters on validation before creating single-run test configs.

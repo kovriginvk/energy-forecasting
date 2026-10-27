@@ -215,3 +215,34 @@ Rename the processed generation dataset's carbon-intensity target to `y` for
 consistent experiment configuration. Preserve the raw source column name,
 same-hour alignment (offset zero), target values, and all other dataset columns.
 Regenerate `dataset_v1.csv` with the updated preparation script.
+
+## 2026-10-27 — Compact generation validation grids
+
+Add separate validation configs for the five regression models using all seven
+generation volumes and two calendar flags, with `y` at offset zero under the
+perfect-generation-forecast assumption. Compare four linear regression settings,
+12 combinations per boosting model (objective, depth, tree count), and six forest
+combinations (objective, depth, leaf size). Use a broader depth range than the
+target-only winners because generation provides different predictors; limit
+absolute-error forests to larger leaves for runtime. Keep weekly refitting and
+fixed seeds, defer training and test selection, and preserve target-only configs.
+
+## 2026-10-27 — Selected generation models for test evaluation
+
+Freeze the lowest-validation-MAE runs from the saved generation experiment
+configs: linear regression run 001 (23.760 g CO2/kWh), with an intercept and
+unconstrained coefficients; XGBoost run 006 (5.561); LightGBM run 006 (5.446).
+Both boosting models use squared error, depth six, 600 trees, and learning rate
+0.05. Preserve all selected parameters and features in single-run test configs
+and evaluate with weekly expanding-window refitting under the same assumption
+of perfect future generation forecasts. Test labels enter training only after
+their observation times; test scores do not determine hyperparameters.
+
+## 2026-10-27 — Selected generation forest and CatBoost for test evaluation
+
+Freeze the lowest-validation-MAE configurations from saved generation runs:
+random forest run 003 (8.403 g CO2/kWh), squared error, 200 trees, unlimited
+depth, leaf size five; CatBoost run 012 (4.450), MAE, depth six, 600 iterations,
+learning rate 0.05, L2 three. Preserve selected features and remaining parameters
+in single-run test configs. Evaluate with the existing weekly expanding-window
+protocol and perfect-generation-forecast assumption, without test-based tuning.
