@@ -1,240 +1,263 @@
-# Energy forecasting
+# Electricity carbon intensity forecasting
 
-Forecast hourly electricity carbon intensity in the Netherlands. Project
-requirements are in `docs/initial_assignment.md`; modeling decisions are in
-`docs/dev_log.md`.
+Forecast the carbon intensity of electricity generation in the Netherlands for
+seven days at hourly resolution: **168 predictions per forecast origin**. The
+project uses historical Nederlandse Energie Data (NED) exports to compare
+renewable-generation models, a broader generation-mix comparison, and baselines
+using only carbon-intensity history.
+
+The [assignment](docs/initial_assignment.md) defines the requirements. The
+[PDF report](data/final_report/report.pdf) and its
+[Markdown source](data/final_report/report.md) explain preprocessing, algorithm
+choices, assumptions, all 16 selected model results, and prediction plots.
+
+**Scope:** archived generation forecasts were unavailable. Generation models
+receive future actual production as a proxy for perfect forecasts. Their scores
+exclude generation forecast errors and do not establish operational seven-day
+forecasting accuracy. Evaluation with real generation forecasts available at
+each forecast origin remains unfinished. Target-only models use observed target
+history and calendar features known in advance.
 
 ## Setup
 
-Install the Python environment with `uv sync`. LightGBM also requires the
-system OpenMP runtime (`libgomp1` on Ubuntu/Debian).
-
-## Experiments
-
-Run the starter configurations from the project root:
+Requirements: Git, [uv](https://docs.astral.sh/uv/), and Python 3.14 (pinned in
+`.python-version`). On Ubuntu/Debian, LightGBM also requires the system OpenMP
+runtime, available as `libgomp1`.
 
 ```bash
-uv run python experiments/run.py experiments/configs/valid/target_only_v1_sma.yaml
-uv run python experiments/run.py experiments/configs/valid/target_only_v1_rm.yaml
-uv run python experiments/run.py experiments/configs/valid/target_only_v1_rf.yaml
-uv run python experiments/run.py experiments/configs/valid/target_only_v1_catboost.yaml
+git clone https://github.com/kovriginvk/energy-forecasting.git
+cd energy-forecasting
+uv sync --locked
 ```
 
-Each YAML config describes one dataset/model pair. Set `dataset` (relative to
-the project root, or absolute), `model` (`sma`, `regression`, `lgbm`, `xgbm`,
-`random_forest`, `catboost`),
-`target`, `target_offset_hours`, and `split` (`valid` or `test`). Store configs in
-`experiments/configs/<split>/`; the directory must match the YAML `split`.
-For final evaluation, copy the selected config into `configs/test/`, set
-`split: test`, and retain only the selected parameter combination.
-Regression models require an explicit `features` list; SMA uses its fixed
-original carbon-intensity history column. Exclude the target and `split`
-from inputs. Use validation to select parameters before evaluating on test.
+`uv` can provision the pinned Python version if needed. `pyproject.toml` defines
+the dependencies; `uv.lock` fixes the resolved environment, including the pytest
+development dependency. Run the commands below from the repository root.
 
-The random forest config defines one 29-combination search with four workers.
-It includes 15 squared-error combinations over depths 4/8/12/20/unlimited and
-leaf sizes 1/20/100, six absolute-error combinations without single-observation
-leaves, four feature-sampling variants, two half-size bootstrap samples, and two
-100-tree variants. The shared baseline uses depth 8, leaf size 20, and 300 trees.
+To use notebooks, open them in VS Code with the Python/Jupyter extensions and
+select `.venv/bin/python` as the kernel. The environment includes `ipykernel`
+and `ipywidgets`; a standalone Jupyter server is not included.
 
-The CatBoost config contains 66 combinations. Its main block crosses MAE/RMSE,
-depths 1/2/4/6/8, and 200/400/800 iterations at learning rate 0.05. Additional
-runs compare learning schedules (0.01 with 1200 iterations; 0.1 with 400), L2
-values 0.1/1/3/10/30, and split-score randomness, feature sampling, and Bernoulli
-row sampling at depths 2/6. Randomness and sampling variants use MAE.
+## Project structure
 
-Both use the same target-only features and weekly evaluation as the existing
-regression models, with a fixed seed. CatBoost uses one worker and disables auxiliary
-training files. The configs contain explicit combinations rather than the full
-cross-product of all parameters. The current search requires 760 fits across
-eight validation origins, including the completed runs; narrow the next search
-using validation results.
-
-`runs` lists the exact parameter combinations to execute, in order. Each entry's
-`params` overrides optional shared `base_params`; there is no Cartesian product:
-
-```yaml
-base_params:
-  season_length: 168
-runs:
-  - params:
-      n_seasons: 1
-  - params:
-      n_seasons: 2
+```text
+├── data/
+│   ├── raw/                  # Original NED CSV exports and joined dataset.csv
+│   ├── processed/            # Generation and target-only modeling datasets
+│   └── final_report/         # English report (Markdown/PDF) and five PNG figures
+├── scripts/                  # Raw-data assembly and dataset preparation
+├── src/
+│   ├── models/               # SMA, linear regression, RF, CatBoost, LightGBM, XGBoost
+│   ├── experiment.py         # Weekly forecasts, refitting, and time alignment
+│   └── evaluator.py          # MAE, RMSE, and R²
+├── experiments/
+│   ├── configs/valid/        # Explicit hyperparameter search combinations
+│   ├── configs/test/         # Frozen validation-selected configurations
+│   ├── run.py                # Execute one YAML configuration
+│   ├── collect_metrics.py    # Combine saved experiment summaries
+│   └── results/              # Generated predictions/metrics; excluded from Git
+├── notebooks/research/
+│   ├── eda/                  # Source-by-source exploratory notebooks
+│   ├── eda_report.md         # EDA findings and preprocessing rationale
+│   ├── prediction_analysis.ipynb
+│   └── final_report_figures.ipynb
+├── tests/                    # Data preparation, models, and experiment checks
+├── docs/                     # Assignment and chronological decision log
+├── pyproject.toml
+└── uv.lock
 ```
 
-Results are saved under
-`experiments/results/<split>/<config_stem>/`. Each launch contains a
-copy of `config.yaml`, an aggregate `metrics.csv` with one row per combination,
-and numbered directories (`001`, `002`, ...). Each numbered directory contains
-`params.json`, `predictions.csv`, `weekly_metrics.csv`, and `metrics.json`. Each launch replaces all
-previous results for that split/config, including obsolete numbered directories.
-Validation and test results with the same config name are stored separately.
-Generated results are excluded from Git.
-Result configs record the parameters used when those results were produced;
-they may differ from the current configs under `experiments/configs/`.
+## Data and preprocessing
 
-Predictions contain feature time, target time, forecast origin, horizon (1–168
-hours), training row count, `y` (the configured actual target), and `y_pred`,
-in kg CO2/kWh. Metrics include MAE and RMSE in g CO2/kWh,
-dimensionless R², row counts, and dataset/model metadata. `weekly_metrics.csv`
-records scores and training size for each forecast origin. Run-level metrics
-score all retained hourly predictions together. Aggregate metrics
-collect the individual runs; they do not average across parameter combinations.
-Regression parameter files use the estimator's `get_params()` output; CatBoost
-reports explicitly supplied parameters, while sklearn-based estimators also
-include defaults.
-NaN parameter defaults, such as XGBoost's `missing` sentinel, are recorded as
-the string `"NaN"` to keep JSON valid; model parameters are unchanged in memory.
+The repository includes the raw exports and processed datasets, so experiments
+can run without portal credentials or another download. The joined data cover
+24,575 hourly observations from December 31, 2023, at 23:00 through October 20,
+2026, at 21:00 UTC. Generation volumes are in kWh; carbon intensity is stored in
+kg CO₂/kWh and converted to g CO₂/kWh for metrics and figures.
 
-Collect all saved experiment summaries without rerunning training:
+To obtain the source data independently, register at the
+[NED data portal](https://ned.nl/nl/dataportaal/dataportaal-overzicht), download
+hourly historical CSV exports for 2024–2026, and place them under `data/raw/`:
+
+| Export | Subdirectory |
+|---|---|
+| Total electricity production, including the CO₂ emission factor | `co2/` |
+| Solar | `sun/` |
+| Onshore / offshore wind | `wind_land/`, `wind_sea/` |
+| Biomass, cogeneration | `biomass/`, `cogeneration/` |
+| Coal, natural gas | `coal/`, `natural_gas/` |
+| Waste, nuclear | `waste/`, `nuclear/` |
+
+Each subdirectory can contain multiple `.csv` files. The assembly script reads
+`validfrom (UTC)` and `volume (kWh)` from generation exports, and
+`validfrom (UTC)` and `emissionfactor (kg CO2/kWh)` from total-production
+exports. Use non-overlapping exports matching the included files; preparation
+requires a sorted, unique, complete hourly time grid. `other/` exports are
+retained for EDA but are not used by the assembly script or models. There is no
+automated portal downloader.
+
+Rebuild the joined and processed data in this order:
 
 ```bash
-uv run python experiments/collect_metrics.py
+uv run python scripts/0_build_raw_dataset.py
+uv run python scripts/1_prepare_dataset_v1.py
+uv run python scripts/1_prepare_dataset_target_only_v1.py
 ```
 
-This rebuilds `experiments/results/metrics.csv` from the `metrics.csv` files in
-both `results/valid/<config_stem>/` and `results/test/<config_stem>/`,
-adding an `experiment` column with the config name. Each row identifies one
-split/experiment/run combination and retains its metrics, parameters, and metadata.
-Rerun collection after changing experiment results; the combined file is
-replaced rather than appended. Use `--results-dir` for another results directory.
-Compare scores on matching datasets, evaluation splits, and target times.
+These commands overwrite `data/raw/dataset.csv`,
+`data/processed/dataset_v1.csv`, and
+`data/processed/dataset_target_only_v1.csv`, respectively.
 
-Open `notebooks/research/prediction_analysis.ipynb` and run all cells to inspect
-saved forecasts and MAE-sorted metrics tables for validation and test. Widgets select the split, experiment, numbered run, and date
-range. The plot compares actual and predicted carbon intensity by target time
-in UTC, alongside saved full-split metrics and model parameters. Rerun the
-notebook after generating new results to refresh the available selections.
+Preprocessing retains the published intensity target. Offshore wind gaps repeat
+the previous daily profile; cogeneration gaps use the mean of observations 168
+and 336 hours earlier. Suspect wind values at the final export hour are replaced
+with previous-hour values. Imputation flags are retained for inspection and
+excluded from model inputs. Waste/nuclear are excluded after quality review;
+`other` has extensive missing hours. Target-only rows with insufficient lag
+history or unknown labels are excluded from training/evaluation.
 
-For `dataset_target_only_v1.csv`, use `target: y` and
-`target_offset_hours: 168`. For `dataset_v1.csv`, use
-`target: y` and `target_offset_hours: 0`, with generation
-and calendar features as inputs. The offset specifies label time relative to
-the dataset index; it does not change or shift dataset values. Future actual
-generation assumes perfect generation forecasts.
+Weekend and Netherlands holiday flags refer to the predicted hour in
+Europe/Amsterdam time, including Liberation Day every year. See the
+[EDA findings](notebooks/research/eda_report.md) and
+[report](data/final_report/report.md) for the rationale and limitations of these
+choices. Preparation scripts encode the fixed dates and corrections for this
+export snapshot; a new snapshot requires reviewing those rules.
 
-The runner uses weekly expanding-window backtesting. The first forecast origin
-is one hour before the first target time in the chosen split; subsequent origins
-are 168 hours apart in UTC. At each origin T, the model is fitted again using all
-complete rows whose target time is at or before T, then predicts T+1 through
-T+168. Training includes earlier validation/test observations once available;
-hyperparameters stay fixed. Test begins with all available train and validation
-history. No additional gap is imposed: label availability determines the cutoff.
-For target-only, training requires feature time + 168 hours <= T, and the input
-block spans T−167 through T. Preceding history is retained for SMA. Generation
-models use the future generation inputs for the forecast week under the perfect
-forecast assumption.
+## Modeling and evaluation
 
-Only full 168-hour windows entirely within the selected split, with known labels
-and complete features, are evaluated. An incomplete window is skipped without
-shifting later origins; a partial final week is excluded. Insufficient SMA
-history raises an error. Metrics record `evaluation_protocol: weekly_expanding`,
-`n_origins`, first/last training sizes (`n_train`, `n_train_last`), and
-`n_excluded_rows`. Select parameters using validation windows and freeze them
-before test evaluation. Results from the former fit-once protocol must be rerun
-before comparison with these scores.
+Three scenarios separate the information supplied to the models:
 
-## How target-only models forecast a full week
+| Scenario / config prefix | Inputs | Dataset |
+|---|---|---|
+| Renewable-only / `renewable_v1` | Solar, onshore/offshore wind, biomass, calendar | `dataset_v1.csv` |
+| Full generation / `generation_v1` | Renewable-only inputs plus coal, natural gas, cogeneration | `dataset_v1.csv` |
+| Target-only / `target_only_v1` | Current intensity, lags 1/2/3/24/48/168/336/504 hours, calendar; history alone for SMA | `dataset_target_only_v1.csv` |
 
-The target-only dataset aligns each historical feature row at time `t` with
-the carbon intensity 168 hours later:
+Linear regression provides a simple reference; random forest and gradient
+boosting (CatBoost, LightGBM, XGBoost) capture nonlinear relationships. A seasonal
+moving average (SMA) is an additional target-only baseline. Hyperparameters are
+selected separately for each model/scenario by lowest validation MAE and frozen
+in the test configs. Search budgets differ between scenarios.
 
-```python
-y = target.shift(-168)
-```
+Splits are chronological by **target time in UTC**:
 
-SMA and the regression models return one prediction per row. To forecast the
-next week at time `T`, apply the model to the last 168 feature rows, shifting
-their prediction times forward by 168 hours:
+| Split | Period | Evaluated complete windows |
+|---|---|---|
+| Train | Before July 1, 2026 | Initial history |
+| Validation | July 1–August 31, 2026 | Eight weeks, 1,344 hours, through August 25 |
+| Test | September 1 onward | Seven weeks, 1,176 hours, through October 19 |
 
-| Feature time | Predicted target time |
+The runner issues non-overlapping weekly forecasts. At origin `T`, it refits on
+all complete rows whose labels are observed by `T` and predicts `T+1` through
+`T+168`. Earlier validation/test labels enter later training once available;
+hyperparameters remain fixed. Incomplete windows and the partial final week are
+excluded. MAE and RMSE are in g CO₂/kWh; R² is dimensionless. Overall metrics
+score all retained hourly predictions together, rather than averaging weekly
+scores. Historical publication delays and revisions are not modeled.
+
+For generation models, inputs and targets describe the same hour
+(`target_offset_hours: 0`); each weekly forecast therefore requires generation
+inputs for all 168 future hours, supplied here as actuals. For target-only,
+`y(t) = intensity(t + 168 hours)` (`target_offset_hours: 168`):
+
+| Historical feature time | Predicted target time |
 |---|---|
 | `T - 167 hours` | `T + 1 hour` |
-| `T - 166 hours` | `T + 2 hours` |
-| ... | ... |
+| … | … |
 | `T` | `T + 168 hours` |
 
-Together these predictions form the complete 168-hour forecast. Historical
-target observations and lags for every input row are already available at `T`;
-calendar features refer to the predicted hour and are known in advance. SMA
-also needs history preceding the block to calculate its seasonal averages.
-Fit the model using only labels available at `T`. This construction requires
-neither future target observations nor feeding predictions back into the model.
+Applying the model to this 168-row historical block produces the full next week
+without future target values or recursive prediction feedback. Training requires
+`t + 168 hours <= T`; SMA also receives preceding history.
 
-The runner applies this alignment at each weekly origin and refits using only
-labels available at that origin. Each complete week contributes 168 predictions
-to the overall scores and one row to `weekly_metrics.csv`.
+## Run experiments
 
-`src/experiment.py` handles training and temporal alignment;
-`src/evaluator.py` calculates metrics. Model implementations are in
-`src/models/`, and data preparation scripts are in `scripts/`.
-
-Run checks with `uv run pytest`.
-
-## Generation validation experiments
-
-The `experiments/configs/valid/generation_v1_*.yaml` configs use `dataset_v1.csv`,
-target `y`, offset zero, all seven generation volumes, and the two calendar flags.
-Future actual generation assumes perfect generation forecasts. Run a config with,
-for example:
-
-```bash
-uv run python experiments/run.py experiments/configs/valid/generation_v1_lgbm.yaml
-```
-
-Linear regression has four intercept/positive-coefficient combinations. Each
-boosting model has 12 combinations: squared/absolute-error objectives, depths
-2/4/6, and 200/600 trees (iterations for CatBoost), at learning rate 0.05.
-LightGBM uses 4/16/32 leaves respectively. Random forest has six combinations:
-squared error at depths 8/unlimited and leaf sizes 5/20, plus absolute error at
-both depths with leaf size 20. Forests use 200 trees and four workers; boosting
-uses one worker and all stochastic estimators use seed 42.
-The 46 combinations require 368 fits across eight validation origins. Select
-parameters on validation before creating single-run test configs.
-
-## Renewable-only comparison
-
-The `experiments/configs/valid/renewable_v1_*.yaml` configs use the same dataset,
-calendar flags, and weekly evaluation as the generation experiments, but retain
-only solar, onshore wind, offshore wind, and biomass generation. Future actual
-renewable generation still assumes perfect forecasts; fossil generation and
-cogeneration are excluded from inputs.
-
-Each boosting model compares depths 2/6 and squared/absolute-error objectives
-with 600 trees at learning rate 0.05 (four combinations). Random forest compares
-depth 8/unlimited with 200 trees, squared error, and leaf size five (two).
-Linear regression compares an intercept against no intercept, with unconstrained
-coefficients (two). The 16 combinations require 128 fits across eight validation
-origins. Run each config as for the generation experiments, for example:
+For a focused reproduction of the main renewable-only model, run its validation
+search and frozen test configuration, then collect metrics:
 
 ```bash
 uv run python experiments/run.py experiments/configs/valid/renewable_v1_catboost.yaml
+uv run python experiments/run.py experiments/configs/test/renewable_v1_catboost.yaml
+uv run python experiments/collect_metrics.py
 ```
 
-Select the lowest-validation-MAE combination for each model before test evaluation.
+To reproduce all three scenarios and all 16 selected test models, run every
+validation and test configuration. The full validation search involves many
+weekly refits and can take substantial time:
 
-The selected combinations are frozen in
-`experiments/configs/test/renewable_v1_*.yaml`. Run them with the same command,
-replacing `valid` with `test`, then rebuild the combined metrics with
-`uv run python experiments/collect_metrics.py`.
+```bash
+for config in experiments/configs/valid/*.yaml; do
+    uv run python experiments/run.py "$config" || break
+done
 
-The completed comparison uses eight validation weeks and seven test weeks.
-All test models cover the same 1,176 hours, September 1–October 19, 2026 (UTC).
-Scores below are in g CO2/kWh; each row uses its own validation-selected
-parameters. Full-mix scores use the previously selected generation models.
+for config in experiments/configs/test/*.yaml; do
+    uv run python experiments/run.py "$config" || break
+done
 
-| Model | Renewable valid MAE | Renewable test MAE | Renewable test RMSE | Full-mix test MAE |
-|---|---:|---:|---:|---:|
-| Linear regression | 36.420 | 34.164 | 40.979 | 20.171 |
-| Random forest | 24.078 | 23.484 | 29.154 | 7.240 |
-| LightGBM | 23.355 | 20.530 | 26.344 | 3.979 |
-| XGBoost | 23.370 | 20.593 | 26.284 | 4.067 |
-| CatBoost | 22.818 | 19.742 | 24.843 | 2.666 |
+uv run python experiments/collect_metrics.py
+```
 
-CatBoost has the lowest renewable-only validation and test MAE. Removing fossil
-generation and cogeneration substantially increases error, showing the value of
-knowing the realized production mix. This compares separately tuned feature
-sets with different search budgets; it does not isolate individual sources'
-contributions. Neither scenario measures operational accuracy with imperfect
-generation forecasts.
+Each config declares the dataset, model, target `y`, target-time offset, split,
+and explicit parameter combinations in `runs`. Regression models also declare
+an ordered `features` list; SMA uses its fixed target-history column. Each run's
+`params` overrides optional `base_params`; combinations are not expanded into a
+Cartesian product. The config must be in a `valid/` or `test/` directory matching
+its `split`. The supplied test configurations already contain the selected
+parameters. For new experiments, select on validation before changing test
+configs; exclude `y`, `split`, and imputation flags from features.
+
+Each launch **replaces previous results for the same split/config** under
+`experiments/results/<split>/<config_stem>/`. The output contains the config
+snapshot, a summary `metrics.csv`, and numbered run directories with:
+
+- `predictions.csv`: feature time, target time, forecast origin, horizon 1–168,
+  training size, actual `y`, and `y_pred` (both in kg CO₂/kWh).
+- `metrics.json` and `weekly_metrics.csv`: overall and per-origin scores,
+  training sizes, and evaluation metadata.
+- `params.json`: effective estimator parameters.
+
+The collector rebuilds `experiments/results/metrics.csv` from saved summaries
+without retraining, preserving split/experiment/run identity. Generated results
+are not committed; rerun experiments to recreate them. Saved config snapshots
+record the parameters actually used for each launch.
+
+## Results and visualizations
+
+All results below cover the same 1,176 test hours. These are the lowest observed
+test MAEs per scenario; hyperparameters were chosen on validation.
+
+| Scenario | Lowest-test-MAE model | MAE, g CO₂/kWh | RMSE, g CO₂/kWh | R² |
+|---|---|---:|---:|---:|
+| Target-only | Random forest | 76.71 | 96.37 | 0.3852 |
+| Renewable-only | CatBoost | 19.74 | 24.84 | 0.9591 |
+| Full generation | CatBoost | 2.67 | 3.65 | 0.9991 |
+
+CatBoost is the validation and test winner in both generation scenarios. For
+target-only, SMA wins on validation but reaches test MAE 80.87, indicating that
+model rankings are not stable across these periods. The near-perfect
+full-generation score reflects a same-hour relationship with the realized mix,
+not demonstrated operational forecast accuracy. Renewable-only CatBoost is the
+main candidate for evaluation with real generation forecasts.
+
+Open `notebooks/research/prediction_analysis.ipynb` after running experiments to
+inspect saved actual/predicted series, metrics, and parameters interactively.
+Run `notebooks/research/final_report_figures.ipynb` after reproducing all
+validation/test runs to regenerate the five PNG report figures. It verifies
+validation/test parameter consistency and trains no models. September forecast
+panels show the three lowest-full-test-MAE models per scenario; panel metrics
+cover only the plotted month, while report tables cover the full test period.
+The committed figures and report are available without rerunning experiments.
+
+The [report](data/final_report/report.pdf) contains the complete comparison and
+next steps: evaluate real forecast inputs and their availability, compare across
+more seasons, and assess robustness before deployment. The
+[decision log](docs/dev_log.md) records the major methodological choices.
+
+## Checks
+
+```bash
+uv run pytest
+```
+
+Tests cover dataset preparation, calendar/target alignment, model behavior, and
+experiment configuration and metric collection.
