@@ -160,3 +160,51 @@ test config: LightGBM run 005 (51.926 g CO2/kWh), absolute error, depth one, two
 leaves, 400 trees; XGBoost run 006 (52.978 g CO2/kWh), absolute error, depth one,
 800 trees. Both retain learning rate 0.05 and the remaining selected parameters;
 evaluate with the same weekly expanding-window protocol as RM and SMA.
+
+## 2026-10-27 — Random forest and CatBoost validation models
+
+Add random forest and CatBoost through the shared row-wise regression interface,
+with CatBoost as a locked dependency. Keep the existing target-only features and
+weekly refitting protocol. Define 12 validation combinations per model: random
+forest uses deeper trees (4/8/12/unlimited), leaf-size and feature-sampling
+regularization, tree counts, and squared/absolute error; CatBoost compares MAE
+at depths 1/2/4, iteration counts, L2, and an RMSE reference. Fix seeds and one
+worker, disable CatBoost training files, and defer test configs until validation
+selection.
+
+## 2026-10-27 — Broader first-stage forest and CatBoost search
+
+Expand validation to 42 random forest and 66 CatBoost combinations before any
+results are available, to avoid centering the initial search on untested defaults.
+Cross depth, leaf size, and objective for forests; cross depth, iteration count,
+and objective for CatBoost. Add selected sampling, regularization, tree-count,
+and learning-rate variants while avoiding a full cross-product of all controls.
+Keep weekly evaluation unchanged and use validation results to narrow the next
+iteration; the complete search entails 864 fits over eight origins.
+
+## 2026-10-27 — Reduce and parallelize the remaining forest search
+
+After 15 squared-error combinations completed, stop the one-worker forest run
+and reduce the remaining 27 combinations to 14. Retain six absolute-error
+variants with larger leaves, four feature-sampling variants, two half-size
+bootstrap samples, and two 100-tree variants; drop the costly one-observation
+MAE leaves and 600-tree variants. Preserve completed results and their explicit
+one-worker parameters; run the remaining combinations with four workers. Keep
+the original configuration snapshot beside the reduced 29-run result config.
+
+## 2026-10-27 — Selected forest and CatBoost models for test evaluation
+
+Freeze the lowest-validation-MAE configurations in single-run test configs:
+random forest run 017 (54.065 g CO2/kWh), absolute error, depth 8, 300 trees,
+leaf size 20, four workers; CatBoost run 031 (51.201 g CO2/kWh), MAE, depth 2,
+1200 iterations, learning rate 0.01, L2 3, one worker. Retain all selected
+parameters and features, using the same weekly expanding-window test protocol
+as the previously evaluated models.
+
+## 2026-10-27 — Canonical forest configuration
+
+Keep the version-controlled forest validation config as one 29-combination
+search with four workers for every combination, removing per-run worker
+overrides left by continuation. Preserve the actual mixed-worker configuration
+in the ignored result snapshot; move the superseded 42-run grid outside the
+results directory. Existing scores and per-run parameter records remain intact.

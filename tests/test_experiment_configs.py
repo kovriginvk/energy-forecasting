@@ -1,6 +1,7 @@
 """Check configurable targets, metrics, and numbered experiment artifacts."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -211,3 +212,39 @@ def test_xgbm_default_missing_value_is_saved_as_valid_json(tmp_path):
     summary = pd.read_csv(output / "metrics.csv")
     assert json.loads(summary.loc[0, "model_params"])["missing"] == "NaN"
     assert summary.loc[0, "n_predictions"] == 168
+
+
+@pytest.mark.parametrize("name", ["rf", "catboost"])
+def test_new_model_configs_refit_weekly_and_save_results(tmp_path, name):
+    config = yaml.safe_load(
+        Path(f"experiments/configs/valid/target_only_v1_{name}.yaml").read_text()
+    )
+    rng = np.random.default_rng(42)
+    index = pd.date_range("2026-01-01", periods=800, freq="h")
+    dataset = pd.DataFrame(
+        rng.uniform(size=(800, len(config["features"]))),
+        columns=config["features"], index=index,
+    )
+    dataset["y"] = 0.1 + 0.2 * dataset.iloc[:, 0]
+    dataset["split"] = ["train"] * 400 + ["valid"] * 400
+    dataset_path = tmp_path / "dataset.csv"
+    dataset.to_csv(dataset_path)
+    config["dataset"] = str(dataset_path)
+    # Exercise MAE training and refitting without running the full search.
+    params = {"n_estimators": 2, "criterion": "absolute_error"} if name == "rf" else {
+        "iterations": 2,
+    }
+    config["runs"] = [{"params": params}]
+    config_path = tmp_path / f"valid/{name}.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text(yaml.safe_dump(config))
+    output = run_config(config_path, tmp_path / "results")
+    saved = json.loads((output / "001/params.json").read_text())
+    for key, value in (config["base_params"] | params).items():
+        assert saved[key] == value
+    metrics = json.loads((output / "001/metrics.json").read_text())
+    assert metrics["n_origins"] == 2
+    assert metrics["n_predictions"] == 336
+    weekly = pd.read_csv(output / "001/weekly_metrics.csv")
+    assert weekly["n_train"].tolist() == [400, 568]
+    assert np.isfinite(weekly["mae_g_co2_per_kwh"]).all()

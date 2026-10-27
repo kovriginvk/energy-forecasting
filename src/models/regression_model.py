@@ -29,7 +29,7 @@ class RegressionModel(BaseForecaster):
         return LinearRegression(**model_params)
 
     def _features(self, X: pd.DataFrame) -> pd.DataFrame:
-        # Preserve input order and use names accepted by all three libraries.
+        # Preserve input order and use names accepted by all regression libraries.
         return X.loc[:, list(self.feature_columns)].set_axis(
             [f"feature_{i}" for i in range(len(self.feature_columns))], axis=1
         )

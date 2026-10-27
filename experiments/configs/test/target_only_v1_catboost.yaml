@@ -1,0 +1,30 @@
+dataset: data/processed/dataset_target_only_v1.csv
+model: catboost
+target: y
+target_offset_hours: 168
+split: test
+
+features:
+  - emissionfactor (kg CO2/kWh)
+  - target_lag_1
+  - target_lag_2
+  - target_lag_3
+  - target_lag_24
+  - target_lag_48
+  - target_lag_168
+  - target_lag_336
+  - target_lag_504
+  - is_holiday
+  - is_weekend
+
+runs:
+  - params:
+      loss_function: MAE
+      random_seed: 42
+      thread_count: 1
+      verbose: false
+      allow_writing_files: false
+      iterations: 1200
+      learning_rate: 0.01
+      depth: 2
+      l2_leaf_reg: 3.0

@@ -16,10 +16,13 @@ Run the starter configurations from the project root:
 ```bash
 uv run python experiments/run.py experiments/configs/valid/target_only_v1_sma.yaml
 uv run python experiments/run.py experiments/configs/valid/target_only_v1_rm.yaml
+uv run python experiments/run.py experiments/configs/valid/target_only_v1_rf.yaml
+uv run python experiments/run.py experiments/configs/valid/target_only_v1_catboost.yaml
 ```
 
 Each YAML config describes one dataset/model pair. Set `dataset` (relative to
-the project root, or absolute), `model` (`sma`, `regression`, `lgbm`, `xgbm`),
+the project root, or absolute), `model` (`sma`, `regression`, `lgbm`, `xgbm`,
+`random_forest`, `catboost`),
 `target`, `target_offset_hours`, and `split` (`valid` or `test`). Store configs in
 `experiments/configs/<split>/`; the directory must match the YAML `split`.
 For final evaluation, copy the selected config into `configs/test/`, set
@@ -27,6 +30,25 @@ For final evaluation, copy the selected config into `configs/test/`, set
 Regression models require an explicit `features` list; SMA uses its fixed
 original carbon-intensity history column. Exclude the target and `split`
 from inputs. Use validation to select parameters before evaluating on test.
+
+The random forest config defines one 29-combination search with four workers.
+It includes 15 squared-error combinations over depths 4/8/12/20/unlimited and
+leaf sizes 1/20/100, six absolute-error combinations without single-observation
+leaves, four feature-sampling variants, two half-size bootstrap samples, and two
+100-tree variants. The shared baseline uses depth 8, leaf size 20, and 300 trees.
+
+The CatBoost config contains 66 combinations. Its main block crosses MAE/RMSE,
+depths 1/2/4/6/8, and 200/400/800 iterations at learning rate 0.05. Additional
+runs compare learning schedules (0.01 with 1200 iterations; 0.1 with 400), L2
+values 0.1/1/3/10/30, and split-score randomness, feature sampling, and Bernoulli
+row sampling at depths 2/6. Randomness and sampling variants use MAE.
+
+Both use the same target-only features and weekly evaluation as the existing
+regression models, with a fixed seed. CatBoost uses one worker and disables auxiliary
+training files. The configs contain explicit combinations rather than the full
+cross-product of all parameters. The current search requires 760 fits across
+eight validation origins, including the completed runs; narrow the next search
+using validation results.
 
 `runs` lists the exact parameter combinations to execute, in order. Each entry's
 `params` overrides optional shared `base_params`; there is no Cartesian product:
@@ -49,6 +71,8 @@ and numbered directories (`001`, `002`, ...). Each numbered directory contains
 previous results for that split/config, including obsolete numbered directories.
 Validation and test results with the same config name are stored separately.
 Generated results are excluded from Git.
+Result configs record the parameters used when those results were produced;
+they may differ from the current configs under `experiments/configs/`.
 
 Predictions contain feature time, target time, forecast origin, horizon (1–168
 hours), training row count, `y` (the configured actual target), and `y_pred`,
@@ -57,7 +81,9 @@ dimensionless R², row counts, and dataset/model metadata. `weekly_metrics.csv`
 records scores and training size for each forecast origin. Run-level metrics
 score all retained hourly predictions together. Aggregate metrics
 collect the individual runs; they do not average across parameter combinations.
-Regression parameter files include estimator defaults.
+Regression parameter files use the estimator's `get_params()` output; CatBoost
+reports explicitly supplied parameters, while sklearn-based estimators also
+include defaults.
 NaN parameter defaults, such as XGBoost's `missing` sentinel, are recorded as
 the string `"NaN"` to keep JSON valid; model parameters are unchanged in memory.
 

@@ -16,7 +16,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from evaluator import evaluate
 from experiment import run_experiment
 from models import (
+    CatBoostRegressionModel,
     LGBMRegressionModel,
+    RandomForestRegressionModel,
     RegressionModel,
     SeasonalMovingAverage,
     XGBMRegressionModel,
@@ -27,6 +29,8 @@ MODELS = {
     "regression": RegressionModel,
     "lgbm": LGBMRegressionModel,
     "xgbm": XGBMRegressionModel,
+    "random_forest": RandomForestRegressionModel,
+    "catboost": CatBoostRegressionModel,
 }
 
 
