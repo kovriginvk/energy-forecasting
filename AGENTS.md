@@ -23,8 +23,9 @@ features describe its predicted hour and are known in advance. SMA receives
 preceding history to compute seasonal averages. The model must be fitted only
 on labels available at forecast origin `T`. No future target observations or
 recursive prediction feedback are needed to construct the weekly forecast.
-The current experiment runner scores individual rows with a single fit; it does
-not simulate successive weekly forecast origins or weekly refitting.
+The experiment runner evaluates complete 168-hour windows at weekly origins,
+refitting on all labels available at each origin, including earlier validation
+or test labels. Hyperparameters remain fixed; incomplete windows are excluded.
 
 # Development Guidelines
 

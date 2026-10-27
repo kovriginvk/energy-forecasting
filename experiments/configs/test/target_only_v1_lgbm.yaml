@@ -1,0 +1,30 @@
+dataset: data/processed/dataset_target_only_v1.csv
+model: lgbm
+target: y
+target_offset_hours: 168
+split: test
+
+features:
+  - emissionfactor (kg CO2/kWh)
+  - target_lag_1
+  - target_lag_2
+  - target_lag_3
+  - target_lag_24
+  - target_lag_48
+  - target_lag_168
+  - target_lag_336
+  - target_lag_504
+  - is_holiday
+  - is_weekend
+
+runs:
+  - params:
+      objective: regression_l1
+      random_state: 42
+      n_jobs: 1
+      n_estimators: 400
+      learning_rate: 0.05
+      max_depth: 1
+      num_leaves: 2
+      min_child_samples: 100
+      reg_lambda: 1.0

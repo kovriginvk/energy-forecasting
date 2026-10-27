@@ -45,16 +45,21 @@ Results are saved under
 `experiments/results/<split>/<config_stem>/`. Each launch contains a
 copy of `config.yaml`, an aggregate `metrics.csv` with one row per combination,
 and numbered directories (`001`, `002`, ...). Each numbered directory contains
-`params.json`, `predictions.csv`, and `metrics.json`. Each launch replaces all
+`params.json`, `predictions.csv`, `weekly_metrics.csv`, and `metrics.json`. Each launch replaces all
 previous results for that split/config, including obsolete numbered directories.
 Validation and test results with the same config name are stored separately.
 Generated results are excluded from Git.
 
-Predictions contain feature time, target time, `y` (the configured actual
-target), and `y_pred`, in kg CO2/kWh. Metrics include MAE and RMSE in g CO2/kWh,
-dimensionless R², row counts, and dataset/model metadata. Aggregate metrics
+Predictions contain feature time, target time, forecast origin, horizon (1–168
+hours), training row count, `y` (the configured actual target), and `y_pred`,
+in kg CO2/kWh. Metrics include MAE and RMSE in g CO2/kWh,
+dimensionless R², row counts, and dataset/model metadata. `weekly_metrics.csv`
+records scores and training size for each forecast origin. Run-level metrics
+score all retained hourly predictions together. Aggregate metrics
 collect the individual runs; they do not average across parameter combinations.
 Regression parameter files include estimator defaults.
+NaN parameter defaults, such as XGBoost's `missing` sentinel, are recorded as
+the string `"NaN"` to keep JSON valid; model parameters are unchanged in memory.
 
 Collect all saved experiment summaries without rerunning training:
 
@@ -83,11 +88,26 @@ and calendar features as inputs. The offset specifies label time relative to
 the dataset index; it does not change or shift dataset values. Future actual
 generation assumes perfect generation forecasts.
 
-The runner fits once on train rows whose labels are available by the first
-evaluated row time, then scores eligible rows in the chosen split. It preserves
-preceding history for SMA. It does not simulate weekly refitting or forecast
-issuance. A target-only block of 168 feature rows ending at time T can produce
-predictions for T+1 through T+168 using only features available at T.
+The runner uses weekly expanding-window backtesting. The first forecast origin
+is one hour before the first target time in the chosen split; subsequent origins
+are 168 hours apart in UTC. At each origin T, the model is fitted again using all
+complete rows whose target time is at or before T, then predicts T+1 through
+T+168. Training includes earlier validation/test observations once available;
+hyperparameters stay fixed. Test begins with all available train and validation
+history. No additional gap is imposed: label availability determines the cutoff.
+For target-only, training requires feature time + 168 hours <= T, and the input
+block spans T−167 through T. Preceding history is retained for SMA. Generation
+models use the future generation inputs for the forecast week under the perfect
+forecast assumption.
+
+Only full 168-hour windows entirely within the selected split, with known labels
+and complete features, are evaluated. An incomplete window is skipped without
+shifting later origins; a partial final week is excluded. Insufficient SMA
+history raises an error. Metrics record `evaluation_protocol: weekly_expanding`,
+`n_origins`, first/last training sizes (`n_train`, `n_train_last`), and
+`n_excluded_rows`. Select parameters using validation windows and freeze them
+before test evaluation. Results from the former fit-once protocol must be rerun
+before comparison with these scores.
 
 ## How target-only models forecast a full week
 
@@ -116,10 +136,9 @@ also needs history preceding the block to calculate its seasonal averages.
 Fit the model using only labels available at `T`. This construction requires
 neither future target observations nor feeding predictions back into the model.
 
-The existing runner evaluates rows individually using one fitted model. Its
-metrics describe that evaluation protocol; it does not explicitly simulate
-weekly forecast issuance or refitting, although the models support forming a
-weekly forecast through the alignment above.
+The runner applies this alignment at each weekly origin and refits using only
+labels available at that origin. Each complete week contributes 168 predictions
+to the overall scores and one row to `weekly_metrics.csv`.
 
 `src/experiment.py` handles training and temporal alignment;
 `src/evaluator.py` calculates metrics. Model implementations are in

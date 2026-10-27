@@ -22,6 +22,15 @@ runs:
       n_seasons: 8
   - params:
       season_length: 24
+      n_seasons: 1
+  - params:
+      season_length: 24
+      n_seasons: 2
+  - params:
+      season_length: 24
+      n_seasons: 4
+  - params:
+      season_length: 24
       n_seasons: 7
   - params:
       season_length: 24

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import shutil
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from evaluator import evaluate
 from experiment import run_experiment
 from models import (
     LGBMRegressionModel,
@@ -72,6 +74,11 @@ def run_config(config_path: Path, results_dir: Path | None = None) -> Path:
         else:
             model = model_class(features, **params)
             effective_params = model.estimator.get_params()
+        # Record NaN defaults (XGBoost's missing sentinel) as valid JSON strings.
+        effective_params = {
+            key: "NaN" if isinstance(value, float) and math.isnan(value) else value
+            for key, value in effective_params.items()
+        }
         predictions, metrics = run_experiment(
             dataset,
             model,
@@ -92,6 +99,16 @@ def run_config(config_path: Path, results_dir: Path | None = None) -> Path:
         run_dir = output / f"{number:03d}"
         run_dir.mkdir()
         predictions.to_csv(run_dir / "predictions.csv")
+        weekly_metrics = [
+            {
+                "forecast_origin (UTC)": origin,
+                "n_train": int(week["n_train"].iloc[0]),
+                "n_predictions": len(week),
+                **evaluate(week),
+            }
+            for origin, week in predictions.groupby("forecast_origin (UTC)")
+        ]
+        pd.DataFrame(weekly_metrics).to_csv(run_dir / "weekly_metrics.csv", index=False)
         (run_dir / "params.json").write_text(
             json.dumps(effective_params, indent=2, allow_nan=False) + "\n"
         )

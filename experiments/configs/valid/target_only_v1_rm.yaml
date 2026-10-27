@@ -20,3 +20,13 @@ features:
 runs:
   - params:
       fit_intercept: true
+      positive: false
+  - params:
+      fit_intercept: true
+      positive: true
+  - params:
+      fit_intercept: false
+      positive: false
+  - params:
+      fit_intercept: false
+      positive: true

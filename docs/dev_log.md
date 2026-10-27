@@ -95,3 +95,68 @@ Store configs in `experiments/configs/<split>/` and results in
 config directory to match its YAML split; reruns replace only that split/config.
 Move existing experiments to valid. The collector reads both splits, preserving
 split/experiment/run identity and checking directory/split consistency.
+
+## 2026-10-27 — Weekly expanding-window evaluation
+
+Replace fit-once row scoring with non-overlapping 168-hour forecasts and refit at
+each weekly origin using all complete rows whose labels are already observed,
+including earlier validation/test observations. Keep hyperparameters fixed;
+anchor origins one hour before the split's first target and step by 168 UTC
+hours. Exclude incomplete windows and the partial final week, retaining SMA
+history. Save origin, horizon, training sizes, per-week scores, and the protocol
+name so the new results can be distinguished from historical fit-once scores.
+
+## 2026-10-27 — Linear regression validation combinations
+
+Compare all four combinations of `fit_intercept` and `positive` on the existing
+target-only features, keeping the unconstrained model with an intercept first
+as the baseline. Use validation to assess the constraints before test selection.
+
+## 2026-10-27 — Selected linear regression for test evaluation
+
+Select `fit_intercept=False` and `positive=True` by the lowest validation MAE
+(49.530 g CO2/kWh across eight weekly origins), retaining the existing feature
+list. Freeze this single combination in the test config and evaluate with the
+same weekly expanding-window protocol.
+
+## 2026-10-27 — Target-only boosting validation configs
+
+Add LightGBM and XGBoost validation configs with the same features as linear
+regression and eight explicit combinations each. Compare shallow-to-moderate
+trees, paired learning rates/tree counts, stronger leaf/L2 regularization, and
+row/feature sampling. Fix the seed and use one worker; enable LightGBM sampling
+with `subsample_freq=1`. Keep squared-error objectives and select by validation
+MAE under weekly refitting, without early stopping or test-based tuning.
+
+## 2026-10-27 — Save XGBoost's missing-value default
+
+Record NaN estimator defaults as the string `"NaN"` in saved parameter metadata
+so XGBoost's default `missing` sentinel does not break strict JSON output. Keep
+the in-memory estimator parameters unchanged and retain finite metric checks.
+
+## 2026-10-27 — Simpler boosting models and absolute-error objectives
+
+Append eight validation combinations per boosting model after depth two performed
+best in the initial search: depth-one trees with 100/200/400 estimators, depth-two
+trees with 50/100/400 estimators, and absolute-error objectives at depths one/two
+with 200 estimators. Keep the learning rate at 0.05 and other parameters at their
+initial best-run values to isolate tree count, depth, and objective effects;
+preserve the first eight combinations and the weekly evaluation protocol.
+
+## 2026-10-27 — Focus boosting configs on absolute-error training
+
+Replace unsuccessful search branches with 13 combinations per boosting config:
+retain the best squared-error reference and both evaluated absolute-error models;
+cover depths one/two with 100/200/400/800 estimators at learning rate 0.05, then
+vary leaf size/child weight and L2 separately around the current absolute-error
+winner. Existing central values are included once. The regularization runs use
+the current winner at 200 trees, before any new tree-count results are available.
+Saved results retain their original config snapshots until the next launch.
+
+## 2026-10-27 — Selected boosting models for test evaluation
+
+Freeze each boosting model's lowest-validation-MAE combination in a single-run
+test config: LightGBM run 005 (51.926 g CO2/kWh), absolute error, depth one, two
+leaves, 400 trees; XGBoost run 006 (52.978 g CO2/kWh), absolute error, depth one,
+800 trees. Both retain learning rate 0.05 and the remaining selected parameters;
+evaluate with the same weekly expanding-window protocol as RM and SMA.
