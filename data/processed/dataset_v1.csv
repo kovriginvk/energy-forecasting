@@ -1,4 +1,4 @@
-validfrom (UTC),sun_volume (kWh),wind_land_volume (kWh),wind_sea_volume (kWh),cogeneration_volume (kWh),biomass_volume (kWh),coal_volume (kWh),natural_gas_volume (kWh),wind_land_is_imputed,wind_sea_is_imputed,cogeneration_is_imputed,is_imputed,emissionfactor (kg CO2/kWh),is_holiday,is_weekend,split
+validfrom (UTC),sun_volume (kWh),wind_land_volume (kWh),wind_sea_volume (kWh),cogeneration_volume (kWh),biomass_volume (kWh),coal_volume (kWh),natural_gas_volume (kWh),wind_land_is_imputed,wind_sea_is_imputed,cogeneration_is_imputed,is_imputed,y,is_holiday,is_weekend,split
 2023-12-31 23:00:00,0,5854186,2979500.0,1370444.0,0,0,1019750,False,False,False,False,0.07341185,True,False,train
 2024-01-01 00:00:00,0,5975233,2995500.0,1360959.0,0,0,1023250,False,False,False,False,0.071290325,True,False,train
 2024-01-01 01:00:00,0,5956427,3018249.0,1356063.0,0,0,1037250,False,False,False,False,0.071482575,True,False,train

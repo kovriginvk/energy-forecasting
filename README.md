@@ -109,7 +109,7 @@ notebook after generating new results to refresh the available selections.
 
 For `dataset_target_only_v1.csv`, use `target: y` and
 `target_offset_hours: 168`. For `dataset_v1.csv`, use
-`target: emissionfactor (kg CO2/kWh)` and `target_offset_hours: 0`, with generation
+`target: y` and `target_offset_hours: 0`, with generation
 and calendar features as inputs. The offset specifies label time relative to
 the dataset index; it does not change or shift dataset values. Future actual
 generation assumes perfect generation forecasts.

@@ -208,3 +208,10 @@ search with four workers for every combination, removing per-run worker
 overrides left by continuation. Preserve the actual mixed-worker configuration
 in the ignored result snapshot; move the superseded 42-run grid outside the
 results directory. Existing scores and per-run parameter records remain intact.
+
+## 2026-10-27 — Generation dataset target name
+
+Rename the processed generation dataset's carbon-intensity target to `y` for
+consistent experiment configuration. Preserve the raw source column name,
+same-hour alignment (offset zero), target values, and all other dataset columns.
+Regenerate `dataset_v1.csv` with the updated preparation script.

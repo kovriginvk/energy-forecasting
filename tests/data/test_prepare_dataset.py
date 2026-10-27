@@ -29,10 +29,10 @@ def test_target_alignment_and_selected_features(raw):
     result = prepare_dataset(raw)
 
     assert result.index.equals(raw.index)
-    assert "y" not in result.columns
+    assert SCRIPT["TARGET"] not in result.columns
     pd.testing.assert_frame_equal(result[SCRIPT["FEATURES"]], raw[SCRIPT["FEATURES"]])
     assert not result.filter(like="is_imputed").to_numpy().any()
-    pd.testing.assert_series_equal(result[SCRIPT["TARGET"]], raw[SCRIPT["TARGET"]])
+    pd.testing.assert_series_equal(result["y"], raw[SCRIPT["TARGET"]].rename("y"))
 
 
 def test_imputation_uses_history_and_preserves_observations(raw):
@@ -109,7 +109,7 @@ def test_repairs_only_known_wind_boundary(raw):
     assert result["is_imputed"].sum() == 1
     assert result.loc[suspect_hour, "is_imputed"]
     assert not result["cogeneration_is_imputed"].any()
-    pd.testing.assert_series_equal(result[SCRIPT["TARGET"]], raw[SCRIPT["TARGET"]])
+    pd.testing.assert_series_equal(result["y"], raw[SCRIPT["TARGET"]].rename("y"))
     pd.testing.assert_frame_equal(raw, original)
 
 

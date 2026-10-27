@@ -63,7 +63,7 @@ def prepare_dataset(raw: pd.DataFrame) -> pd.DataFrame:
     dataset["is_imputed"] = dataset[
         ["wind_land_is_imputed", "wind_sea_is_imputed", "cogeneration_is_imputed"]
     ].any(axis=1)
-    dataset[TARGET] = raw[TARGET]
+    dataset["y"] = raw[TARGET]
     local_time = dataset.index.tz_localize("UTC").tz_convert("Europe/Amsterdam")
     # Include Liberation Day every year, even when it is not a general day off.
     calendar = holidays.country_holidays(
